@@ -5,6 +5,7 @@ import httpx
 import pytz
 from bs4 import BeautifulSoup
 
+from app.config import settings
 from app.schemas.rate import RateData
 from app.sources.base import ExchangeRateSource
 
@@ -38,11 +39,12 @@ class HanaBankSource(ExchangeRateSource):
 
     async def fetch_rates(self) -> list[RateData]:
         try:
+            verify_ssl = settings.env != "development"
             async with httpx.AsyncClient(
-                timeout=10.0,
+                timeout=settings.api_timeout,
                 follow_redirects=True,
                 headers=DESKTOP_HEADERS,
-                verify=False,
+                verify=verify_ssl,
             ) as client:
                 # POST 요청으로 환율 데이터 조회
                 resp = await client.post(
@@ -127,7 +129,8 @@ class HanaBankSource(ExchangeRateSource):
 
     async def health_check(self) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True, headers=DESKTOP_HEADERS, verify=False) as client:
+            verify_ssl = settings.env != "development"
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True, headers=DESKTOP_HEADERS, verify=verify_ssl) as client:
                 resp = await client.get(self.URL)
                 return resp.status_code == 200
         except Exception:

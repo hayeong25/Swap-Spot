@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     database_url: str = "sqlite+aiosqlite:///./swap_spot.db"
+    env: str = "development"
+    api_timeout: int = 10
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

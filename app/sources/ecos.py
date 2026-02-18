@@ -32,7 +32,8 @@ class EcosSource(ExchangeRateSource):
         today = date.today()
         rates = []
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            verify_ssl = settings.env != "development"
+            async with httpx.AsyncClient(timeout=settings.api_timeout, verify=verify_ssl) as client:
                 for currency, item_code in ECOS_CURRENCY_ITEMS.items():
                     rate = await self._fetch_single(client, currency, item_code, today)
                     if rate:
@@ -55,7 +56,8 @@ class EcosSource(ExchangeRateSource):
             f"/{item_code}"
         )
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            verify_ssl = settings.env != "development"
+            async with httpx.AsyncClient(timeout=settings.api_timeout, verify=verify_ssl) as client:
                 resp = await client.get(url)
                 resp.raise_for_status()
                 data = resp.json()
@@ -120,7 +122,8 @@ class EcosSource(ExchangeRateSource):
                 f"{self.BASE_URL}/{settings.ecos_api_key}/json/kr/1/1"
                 f"/{TABLE_CODE}/D/20240101/20240102/{ITEM_CODE_PREFIX}"
             )
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            verify_ssl = settings.env != "development"
+            async with httpx.AsyncClient(timeout=5.0, verify=verify_ssl) as client:
                 resp = await client.get(url)
                 return resp.status_code == 200
         except Exception:

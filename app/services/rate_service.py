@@ -1,9 +1,10 @@
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
 import pytz
-from sqlalchemy import select
+from sqlalchemy import select, func, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import async_session
@@ -14,15 +15,18 @@ from app.sources.aggregator import RateAggregator
 logger = logging.getLogger(__name__)
 KST = pytz.timezone("Asia/Seoul")
 
+_cache_lock = asyncio.Lock()
+
 
 @dataclass
 class RateCache:
     latest: dict[str, RateData] = field(default_factory=dict)
     updated_at: datetime | None = None
 
-    def update(self, currency: str, rate: RateData):
-        self.latest[currency] = rate
-        self.updated_at = datetime.now(KST)
+    async def update(self, currency: str, rate: RateData):
+        async with _cache_lock:
+            self.latest[currency] = rate
+            self.updated_at = datetime.now(KST)
 
     def get_all(self) -> dict[str, RateData]:
         return dict(self.latest)
@@ -50,7 +54,7 @@ async def fetch_and_store(aggregator: RateAggregator) -> dict[str, RateData]:
                 rate_date=rate_data.rate_date,
             )
             session.add(db_rate)
-            rate_cache.update(currency, rate_data)
+            await rate_cache.update(currency, rate_data)
 
         await session.commit()
 
@@ -102,35 +106,35 @@ async def get_rate_values(currency: str, days: int = 90) -> list[float]:
 
 
 async def load_latest_from_db():
-    """DB에서 각 통화별 최신 환율을 캐시에 로드"""
+    """DB에서 각 통화별 최신 환율을 캐시에 로드 (단일 쿼리)"""
     async with async_session() as session:
-        from sqlalchemy import func, distinct
-        currencies_stmt = select(distinct(ExchangeRate.currency_code))
-        result = await session.execute(currencies_stmt)
-        currencies = [row[0] for row in result.all()]
-
-        for currency in currencies:
-            stmt = (
-                select(ExchangeRate)
-                .where(ExchangeRate.currency_code == currency)
-                .order_by(ExchangeRate.rate_date.desc(), ExchangeRate.fetched_at.desc())
-                .limit(1)
+        # 통화별 최신 id를 서브쿼리로 가져와 N+1 방지
+        latest_ids_subq = (
+            select(
+                func.max(ExchangeRate.id).label("max_id")
             )
-            result = await session.execute(stmt)
-            row = result.scalar_one_or_none()
-            if row:
-                rate_cache.update(currency, RateData(
-                    currency_code=row.currency_code,
-                    base_currency=row.base_currency,
-                    rate=row.rate,
-                    cash_buy_rate=row.cash_buy_rate,
-                    cash_sell_rate=row.cash_sell_rate,
-                    tt_buy_rate=row.tt_buy_rate,
-                    tt_sell_rate=row.tt_sell_rate,
-                    spread=row.spread,
-                    source=row.source,
-                    fetched_at=row.fetched_at,
-                    rate_date=row.rate_date,
-                ))
+            .group_by(ExchangeRate.currency_code)
+            .subquery()
+        )
+        stmt = select(ExchangeRate).where(
+            ExchangeRate.id.in_(select(latest_ids_subq.c.max_id))
+        )
+        result = await session.execute(stmt)
+        rows = result.scalars().all()
+
+        for row in rows:
+            await rate_cache.update(row.currency_code, RateData(
+                currency_code=row.currency_code,
+                base_currency=row.base_currency,
+                rate=row.rate,
+                cash_buy_rate=row.cash_buy_rate,
+                cash_sell_rate=row.cash_sell_rate,
+                tt_buy_rate=row.tt_buy_rate,
+                tt_sell_rate=row.tt_sell_rate,
+                spread=row.spread,
+                source=row.source,
+                fetched_at=row.fetched_at,
+                rate_date=row.rate_date,
+            ))
 
     logger.info(f"Loaded {len(rate_cache.latest)} currencies from DB")

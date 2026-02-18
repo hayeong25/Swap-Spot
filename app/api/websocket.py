@@ -75,7 +75,10 @@ async def broadcast_rates(rates: dict):
     for ws in connected_clients:
         try:
             await ws.send_text(payload)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"WS broadcast failed for client: {e}")
             disconnected.add(ws)
 
-    connected_clients.difference_update(disconnected)
+    if disconnected:
+        connected_clients.difference_update(disconnected)
+        logger.info(f"Removed {len(disconnected)} disconnected WS clients")

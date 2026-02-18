@@ -22,7 +22,8 @@ class KoreaEximSource(ExchangeRateSource):
             return []
 
         try:
-            async with httpx.AsyncClient(timeout=10.0, verify=False, follow_redirects=True) as client:
+            verify_ssl = settings.env != "development"
+            async with httpx.AsyncClient(timeout=settings.api_timeout, verify=verify_ssl, follow_redirects=True) as client:
                 # 오늘 데이터가 없으면 최근 영업일까지 최대 7일 역추적
                 data = []
                 search_date = datetime.now(KST).date()
@@ -34,7 +35,11 @@ class KoreaEximSource(ExchangeRateSource):
                     }
                     resp = await client.get(self.BASE_URL, params=params)
                     resp.raise_for_status()
-                    data = resp.json()
+                    try:
+                        data = resp.json()
+                    except ValueError:
+                        logger.error(f"KoreaExim: invalid JSON response for {search_date}")
+                        return []
 
                     if isinstance(data, list) and len(data) > 0:
                         # result 코드 확인 (1=성공)
@@ -93,7 +98,8 @@ class KoreaEximSource(ExchangeRateSource):
 
     async def health_check(self) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=5.0, verify=False, follow_redirects=True) as client:
+            verify_ssl = settings.env != "development"
+            async with httpx.AsyncClient(timeout=5.0, verify=verify_ssl, follow_redirects=True) as client:
                 resp = await client.get(self.BASE_URL, params={
                     "authkey": settings.koreaexim_api_key,
                     "searchdate": datetime.now(KST).strftime("%Y%m%d"),
