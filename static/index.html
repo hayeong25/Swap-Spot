@@ -106,6 +106,25 @@
             <div id="travel-result"></div>
         </section>
 
+        <!-- 확률 예측 (Monte Carlo) -->
+        <section class="forecast-section">
+            <h2>환율 하락 확률 예측</h2>
+            <div class="forecast-controls">
+                <select id="forecast-currency">
+                    <option value="USD">USD 미국 달러</option>
+                    <option value="EUR">EUR 유로</option>
+                    <option value="JPY">JPY 일본 엔</option>
+                    <option value="GBP">GBP 영국 파운드</option>
+                    <option value="CNH">CNH 중국 위안</option>
+                    <option value="CHF">CHF 스위스 프랑</option>
+                    <option value="CAD">CAD 캐나다 달러</option>
+                    <option value="AUD">AUD 호주 달러</option>
+                </select>
+                <button id="forecast-btn">확률 분석</button>
+            </div>
+            <div id="forecast-result"></div>
+        </section>
+
         <!-- 차트 섹션 -->
         <section class="chart-section">
             <div class="chart-header">
@@ -158,6 +177,6 @@
         </footer>
     </main>
 
-    <script src="/js/app.js?v=6"></script>
+    <script src="/js/app.js?v=9"></script>
 </body>
 </html>

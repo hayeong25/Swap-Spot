@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query
 
 from app.schemas.rate import HistoricalRateResponse, RateResponse
 from app.services.rate_service import get_historical_rates, rate_cache
+from app.services.forecast_engine import get_forecast_cached
 from app.services.timing_engine import compute_timing, compute_travel_timing
 from app.utils.currency import MAJOR_CURRENCIES
 
@@ -43,6 +44,11 @@ async def get_timing(currency: str) -> dict:
 @router.get("/travel-timing/{currency}")
 async def get_travel_timing(currency: str, travel_date: date = Query(...)) -> dict:
     return await compute_travel_timing(currency.upper(), travel_date)
+
+
+@router.get("/forecast/{currency}")
+async def get_forecast(currency: str) -> dict:
+    return await get_forecast_cached(currency.upper())
 
 
 @router.get("/health/sources")

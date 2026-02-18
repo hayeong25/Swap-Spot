@@ -66,6 +66,7 @@ function setupEventListeners() {
     });
     document.getElementById('add-alert-btn').addEventListener('click', addAlert);
     document.getElementById('travel-analyze-btn').addEventListener('click', fetchTravelTiming);
+    document.getElementById('forecast-btn').addEventListener('click', fetchForecast);
 }
 
 // ===== Debounce helpers =====
@@ -313,6 +314,79 @@ function renderTravelTiming(data) {
             </div>
         </div>
     `;
+}
+
+// ===== Forecast (Monte Carlo) =====
+async function fetchForecast() {
+    const currency = document.getElementById('forecast-currency').value;
+    const container = document.getElementById('forecast-result');
+    container.innerHTML = '<div class="forecast-loading">시뮬레이션 실행 중...</div>';
+
+    try {
+        const resp = await fetch(`/api/rates/forecast/${encodeURIComponent(currency)}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        renderForecast(data);
+    } catch (e) {
+        container.innerHTML = '<div class="forecast-loading">분석 실패</div>';
+    }
+}
+
+function renderForecast(data) {
+    const container = document.getElementById('forecast-result');
+
+    if (!data || data.error) {
+        container.innerHTML = `<div class="forecast-loading">${data?.error || '데이터 부족'}</div>`;
+        return;
+    }
+
+    function getDateRange(weeks) {
+        const start = new Date();
+        const end = new Date();
+        end.setDate(end.getDate() + weeks * 7);
+        const fmt = d => `${d.getMonth() + 1}/${d.getDate()}`;
+        return `${fmt(start)} ~ ${fmt(end)}`;
+    }
+
+    let html = `
+        <div class="forecast-meta">
+            <span>현재 환율: ${krw(data.current_rate)}</span>
+        </div>
+        <div class="forecast-horizons">
+    `;
+
+    for (const horizon of data.horizons) {
+        html += `
+            <div class="forecast-horizon-card">
+                <div class="horizon-header">${getDateRange(horizon.weeks)}</div>
+                <div class="horizon-distribution">
+                    <span class="dist-range">${krw(horizon.distribution.p25)} ~ ${krw(horizon.distribution.p75)}</span>
+                </div>
+                <div class="horizon-targets">
+        `;
+
+        for (const target of horizon.targets) {
+            const pctValue = Math.round(target.probability * 100);
+            const barColor = pctValue >= 50 ? 'var(--green)'
+                           : pctValue >= 25 ? 'var(--yellow)'
+                           : 'var(--text-secondary)';
+
+            html += `
+                <div class="target-row">
+                    <span class="target-rate">${target.label} 이하</span>
+                    <div class="target-bar-wrap">
+                        <div class="target-bar" style="width:${pctValue}%;background:${barColor}"></div>
+                    </div>
+                    <span class="target-prob" style="color:${barColor}">${pctValue}%</span>
+                </div>
+            `;
+        }
+
+        html += `</div></div>`;
+    }
+
+    html += `</div>`;
+    container.innerHTML = html;
 }
 
 // ===== Chart =====

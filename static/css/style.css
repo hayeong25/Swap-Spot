@@ -539,6 +539,157 @@ main {
     color: var(--text-secondary);
 }
 
+/* Forecast Section */
+.forecast-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.forecast-section h2 {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+}
+
+.forecast-controls {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.forecast-controls select {
+    background: var(--surface-hover);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+#forecast-btn {
+    background: linear-gradient(135deg, #4f8cff, #00d68f);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1.5rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    white-space: nowrap;
+}
+
+#forecast-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(79, 140, 255, 0.3);
+}
+
+.forecast-meta {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.forecast-horizons {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.forecast-horizon-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+}
+
+.horizon-header {
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
+    color: var(--accent);
+}
+
+.horizon-distribution {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+}
+
+.dist-label {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+}
+
+.dist-range {
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.dist-sub {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
+.horizon-targets {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.target-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.target-rate {
+    min-width: 110px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    font-size: 0.78rem;
+}
+
+.target-bar-wrap {
+    flex: 1;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.target-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.target-prob {
+    min-width: 35px;
+    text-align: right;
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.forecast-loading {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    padding: 1.5rem;
+    text-align: center;
+}
+
 /* Chart */
 .chart-section {
     background: var(--surface);
@@ -692,6 +843,7 @@ select:focus, input:focus, button:focus-visible {
 @media (max-width: 1024px) {
     .travel-icon-flow { gap: 0.5rem; }
     .travel-details { grid-template-columns: repeat(2, 1fr); }
+    .forecast-horizons { grid-template-columns: 1fr 1fr; }
 }
 
 /* Responsive - mobile */
@@ -713,4 +865,6 @@ select:focus, input:focus, button:focus-visible {
     .step-icon { width: 44px; height: 44px; font-size: 1.5rem; }
     .travel-arrow { font-size: 1rem; }
     .travel-tip { border-left: none; border-top: 3px solid var(--accent); border-radius: 0 0 8px 8px; }
+    .forecast-horizons { grid-template-columns: 1fr; }
+    .forecast-controls { flex-direction: column; align-items: stretch; }
 }
