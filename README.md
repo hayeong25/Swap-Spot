@@ -8,7 +8,7 @@
 
 ---
 
-## Features
+## ✨ Features
 
 ### 실시간 환율 테이블
 - 11개 주요 통화(USD, EUR, JPY, GBP, CNH, CHF, CAD, AUD, HKD, SGD, THB) 매매기준율 표시
@@ -41,7 +41,7 @@
 
 ---
 
-## Tech Stack
+## 🛠 Tech Stack
 
 | Layer | Tech | Why |
 |-------|------|-----|
@@ -57,7 +57,7 @@
 
 ---
 
-## Data Sources
+## 📡 Data Sources
 
 | Source | Type | Schedule |
 |--------|------|----------|
@@ -67,7 +67,7 @@
 
 ---
 
-## Getting Started
+## 🚀 Getting Started
 
 ### 1. Clone & Install
 
@@ -106,7 +106,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ---
 
-## Project Structure
+## 📂 Project Structure
 
 ```
 app/
@@ -142,7 +142,7 @@ static/                        # 프론트엔드
 
 ---
 
-## API Endpoints
+## 📌 API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -158,6 +158,6 @@ static/                        # 프론트엔드
 
 ---
 
-## Disclaimer
+## ⚠️ Disclaimer
 
 본 서비스의 환전 타이밍 추천은 **통계적 분석 도구**이며, 투자 또는 환전에 대한 전문적인 금융 조언이 아닙니다. 환율은 다양한 거시경제적 요인에 의해 변동되며, 과거 데이터가 미래 결과를 보장하지 않습니다.
