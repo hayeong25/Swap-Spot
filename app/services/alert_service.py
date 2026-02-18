@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 import pytz
@@ -12,6 +12,8 @@ from app.services.rate_service import get_rate_values, rate_cache
 
 logger = logging.getLogger(__name__)
 KST = pytz.timezone("Asia/Seoul")
+
+ALERT_COOLDOWN_MINUTES = 60
 
 alert_callbacks: list = []
 
@@ -30,6 +32,12 @@ async def evaluate_alerts():
             cached = rate_cache.latest.get(alert.currency_code)
             if not cached:
                 continue
+
+            # 쿨다운 체크 — 마지막 발송 후 일정 시간 이내면 스킵
+            if alert.last_triggered_at:
+                cooldown_until = alert.last_triggered_at + timedelta(minutes=ALERT_COOLDOWN_MINUTES)
+                if datetime.now(KST) < cooldown_until.replace(tzinfo=KST) if cooldown_until.tzinfo is None else cooldown_until:
+                    continue
 
             triggered = False
             message = ""
@@ -69,13 +77,18 @@ async def dispatch_alert(alert: Alert, message: str):
         await send_telegram(message)
 
 
-async def send_telegram(message: str):
+async def send_telegram(message: str, max_retries: int = 3):
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            await client.post(url, json={
-                "chat_id": settings.telegram_chat_id,
-                "text": f"💱 Swap Spot Alert\n{message}",
-            })
-    except Exception as e:
-        logger.error(f"Telegram send failed: {e}")
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.post(url, json={
+                    "chat_id": settings.telegram_chat_id,
+                    "text": f"💱 Swap Spot Alert\n{message}",
+                })
+                if resp.status_code == 200:
+                    return
+                logger.warning(f"Telegram send returned {resp.status_code} (attempt {attempt + 1})")
+        except Exception as e:
+            logger.error(f"Telegram send failed (attempt {attempt + 1}): {e}")
+    logger.error("Telegram send failed after all retries")
