@@ -149,7 +149,7 @@ async def main():
         print("\n[4] 환전 타이밍 엔진 검증")
         print("-" * 50)
 
-        timing_currencies = ["USD", "EUR", "JPY", "GBP", "CAD", "AUD", "CHF", "HKD", "SGD", "CNY"]
+        timing_currencies = ["USD", "EUR", "JPY", "GBP", "CAD", "AUD", "CHF", "HKD", "SGD", "CNH"]
 
         for cur in timing_currencies:
             resp = await client.get(f"/api/rates/timing/{cur}")

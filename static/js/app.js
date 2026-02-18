@@ -36,6 +36,10 @@ const CONDITION_LABELS = {
 let rateChart = null;
 let ws = null;
 let currentRates = {};
+let wsReconnectAttempts = 0;
+let wsReconnectTimer = null;
+let chartUpdateTimer = null;
+let timingUpdateTimer = null;
 
 // ===== Initialization =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -52,22 +56,34 @@ document.addEventListener('DOMContentLoaded', () => {
 // ===== Event Listeners =====
 function setupEventListeners() {
     document.getElementById('timing-currency').addEventListener('change', fetchTimingData);
-    document.getElementById('chart-currency').addEventListener('change', () => updateChart());
+    document.getElementById('chart-currency').addEventListener('change', () => debouncedChartUpdate());
     document.querySelectorAll('.period-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
             e.target.classList.add('active');
-            updateChart();
+            debouncedChartUpdate();
         });
     });
     document.getElementById('add-alert-btn').addEventListener('click', addAlert);
     document.getElementById('travel-analyze-btn').addEventListener('click', fetchTravelTiming);
 }
 
+// ===== Debounce helpers =====
+function debouncedChartUpdate() {
+    if (chartUpdateTimer) clearTimeout(chartUpdateTimer);
+    chartUpdateTimer = setTimeout(() => updateChart(), 300);
+}
+
+function debouncedTimingUpdate() {
+    if (timingUpdateTimer) clearTimeout(timingUpdateTimer);
+    timingUpdateTimer = setTimeout(() => fetchTimingData(), 300);
+}
+
 // ===== Rates =====
 async function fetchLatestRates() {
     try {
         const resp = await fetch('/api/rates/latest');
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const rates = await resp.json();
         currentRates = {};
         rates.forEach(r => { currentRates[r.currency_code] = r; });
@@ -81,18 +97,25 @@ async function fetchLatestRates() {
 
 function renderRateCards(rates) {
     const container = document.getElementById('rate-cards');
-    if (!rates.length) {
+    if (!rates || !rates.length) {
         container.innerHTML = '<tr><td colspan="7" class="loading">데이터 없음. API 키를 확인해주세요.</td></tr>';
         return;
     }
 
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
     function cellHtml(r) {
+        const code = escapeHtml(r.currency_code || '');
         const info = CURRENCY_INFO[r.currency_code] || { name: r.currency_name || r.currency_code, unit: 1 };
         const unitLabel = info.unit > 1 ? ` (${info.unit}단위)` : '';
         return `
-            <td class="cell-clickable" onclick="selectCurrency('${r.currency_code}')" data-currency="${r.currency_code}"><span class="currency-code">${r.currency_code}</span></td>
-            <td class="cell-clickable" onclick="selectCurrency('${r.currency_code}')"><span class="currency-name-cell">${info.name}${unitLabel}</span></td>
-            <td class="col-right rate-value-cell cell-clickable" onclick="selectCurrency('${r.currency_code}')">${krw(r.rate)}</td>`;
+            <td class="cell-clickable" onclick="selectCurrency('${code}')" data-currency="${code}"><span class="currency-code">${code}</span></td>
+            <td class="cell-clickable" onclick="selectCurrency('${code}')"><span class="currency-name-cell">${escapeHtml(info.name)}${unitLabel}</span></td>
+            <td class="col-right rate-value-cell cell-clickable" onclick="selectCurrency('${code}')">${krw(r.rate)}</td>`;
     }
 
     const rows = [];
@@ -100,7 +123,7 @@ function renderRateCards(rates) {
     for (let i = 0; i < half; i++) {
         const left = rates[i];
         const right = rates[i + half];
-        rows.push(`<tr class="rate-row" data-currency="${left.currency_code}${right ? ' ' + right.currency_code : ''}">
+        rows.push(`<tr class="rate-row" data-currency="${escapeHtml(left.currency_code)}${right ? ' ' + escapeHtml(right.currency_code) : ''}">
             ${cellHtml(left)}
             <td class="col-divider"></td>
             ${right ? cellHtml(right) : '<td></td><td></td><td></td>'}
@@ -112,8 +135,8 @@ function renderRateCards(rates) {
 function selectCurrency(code) {
     document.getElementById('chart-currency').value = code;
     document.getElementById('timing-currency').value = code;
-    updateChart();
-    fetchTimingData();
+    debouncedChartUpdate();
+    debouncedTimingUpdate();
 }
 
 // ===== Timing =====
@@ -123,7 +146,8 @@ async function fetchTimingData() {
     container.innerHTML = '<div class="timing-loading">분석 중...</div>';
 
     try {
-        const resp = await fetch(`/api/rates/timing/${currency}`);
+        const resp = await fetch(`/api/rates/timing/${encodeURIComponent(currency)}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
         renderTiming(data, currency);
     } catch (e) {
@@ -133,6 +157,10 @@ async function fetchTimingData() {
 
 function renderTiming(data, currency) {
     const container = document.getElementById('timing-result');
+    if (!data || !data.recommendation) {
+        container.innerHTML = '<div class="timing-loading">데이터 부족</div>';
+        return;
+    }
     const rec = data.recommendation;
     const recLabel = { BUY: '매수 적기', HOLD: '관망', WAIT: '대기' }[rec] || rec;
     const recDesc = {
@@ -140,7 +168,7 @@ function renderTiming(data, currency) {
         HOLD: '환율이 평균 수준입니다. 급하지 않다면 추이를 지켜보세요.',
         WAIT: '현재 환율이 최근 대비 높은 수준입니다. 조금 더 기다려보는 것을 추천합니다.',
     }[rec] || '';
-    const confPct = Math.round(data.confidence * 100);
+    const confPct = Math.round((data.confidence || 0) * 100);
 
     const signals = data.signals || {};
     const signalHtml = Object.entries(signals).map(([key, val]) => {
@@ -168,7 +196,7 @@ function renderTiming(data, currency) {
             </div>
             <div class="timing-detail-item">
                 <div class="label">90일 내 위치</div>
-                <div class="value">${data.percentile_90d}% <span style="font-size:0.75rem;color:var(--text-secondary)">(상위 ${(100 - data.percentile_90d).toFixed(1)}%)</span></div>
+                <div class="value">${data.percentile_90d != null ? data.percentile_90d + '%' : '-'} <span style="font-size:0.75rem;color:var(--text-secondary)">${data.percentile_90d != null ? '(상위 ' + (100 - data.percentile_90d).toFixed(1) + '%)' : ''}</span></div>
             </div>
             <div class="timing-detail-item">
                 <div class="label">단기 이동평균 5일 (원)</div>
@@ -208,7 +236,8 @@ async function fetchTravelTiming() {
     container.innerHTML = '<div class="travel-loading">분석 중...</div>';
 
     try {
-        const resp = await fetch(`/api/rates/travel-timing/${currency}?travel_date=${travelDate}`);
+        const resp = await fetch(`/api/rates/travel-timing/${encodeURIComponent(currency)}?travel_date=${encodeURIComponent(travelDate)}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
         renderTravelTiming(data);
     } catch (e) {
@@ -218,6 +247,11 @@ async function fetchTravelTiming() {
 
 function renderTravelTiming(data) {
     const container = document.getElementById('travel-result');
+
+    if (!data || !data.recommendation) {
+        container.innerHTML = '<div class="travel-loading">데이터 부족</div>';
+        return;
+    }
 
     const recLabels = { BUY: '지금 환전', HOLD: '조금 더 관망', WAIT: '하락 대기' };
     const recLabel = recLabels[data.recommendation] || data.recommendation;
@@ -246,13 +280,13 @@ function renderTravelTiming(data) {
         <div class="travel-result-card">
             <div class="travel-top">
                 <div class="travel-badge" style="border-color:${color};background:${bg};color:${color}">
-                    <div class="travel-dday">D-${data.days_remaining}</div>
+                    <div class="travel-dday">D-${data.days_remaining ?? '?'}</div>
                     <div class="travel-rec">${recLabel}</div>
-                    <div class="travel-urgency">${data.urgency_label}</div>
+                    <div class="travel-urgency">${data.urgency_label || ''}</div>
                 </div>
                 <div class="travel-info">
-                    <div class="travel-message">${data.message}</div>
-                    <div class="travel-tip">${data.tip}</div>
+                    <div class="travel-message">${data.message || ''}</div>
+                    <div class="travel-tip">${data.tip || ''}</div>
                 </div>
             </div>
             <div class="travel-details">
@@ -266,11 +300,11 @@ function renderTravelTiming(data) {
                 </div>` : ''}
                 <div class="travel-detail-item">
                     <div class="label">90일 백분위</div>
-                    <div class="value">${data.percentile_90d?.toFixed(1) ?? '-'}%</div>
+                    <div class="value">${data.percentile_90d != null ? data.percentile_90d.toFixed(1) + '%' : '-'}</div>
                 </div>
                 <div class="travel-detail-item">
                     <div class="label">신뢰도</div>
-                    <div class="value">${(data.confidence * 100).toFixed(0)}%</div>
+                    <div class="value">${data.confidence != null ? (data.confidence * 100).toFixed(0) + '%' : '-'}</div>
                 </div>
                 <div class="travel-detail-item">
                     <div class="label">시그널</div>
@@ -358,8 +392,18 @@ async function updateChart() {
     const days = activeBtn ? parseInt(activeBtn.dataset.days) : 30;
 
     try {
-        const resp = await fetch(`/api/rates/${currency}?days=${days}`);
+        const resp = await fetch(`/api/rates/${encodeURIComponent(currency)}?days=${days}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
+
+        if (!data.rates || data.rates.length === 0) {
+            rateChart.data.labels = [];
+            rateChart.data.datasets[0].data = [];
+            rateChart.data.datasets[0].label = `데이터 없음 (${currency}/KRW)`;
+            rateChart.update();
+            return;
+        }
+
         const labels = data.rates.map(r => r.date);
         const ttBuy = data.rates.map(r => r.tt_buy_rate || r.rate);
 
@@ -375,38 +419,60 @@ async function updateChart() {
 
 // ===== WebSocket =====
 function connectWebSocket() {
+    if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+    }
+
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${location.host}/ws/rates`);
 
-    ws.onopen = () => updateStatus('connected');
+    ws.onopen = () => {
+        wsReconnectAttempts = 0;
+        updateStatus('connected');
+    };
 
     ws.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'snapshot' || msg.type === 'update') {
-            Object.entries(msg.data).forEach(([code, rate]) => {
-                currentRates[code] = rate;
-                flashCard(code);
-            });
-            const rateList = Object.values(currentRates);
-            renderRateCards(rateList);
-            updateStatus('connected', new Date());
+        try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'snapshot' || msg.type === 'update') {
+                Object.entries(msg.data).forEach(([code, rate]) => {
+                    currentRates[code] = rate;
+                    flashCard(code);
+                });
+                const rateList = Object.values(currentRates);
+                renderRateCards(rateList);
+                updateStatus('connected', new Date());
+            }
+        } catch (e) {
+            console.error('WS message parse error:', e);
         }
     };
 
     ws.onclose = () => {
         updateStatus('disconnected');
-        setTimeout(connectWebSocket, 5000);
+        scheduleReconnect();
     };
 
-    ws.onerror = () => updateStatus('disconnected');
-
-    // Keep-alive ping
-    setInterval(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send('ping');
-        }
-    }, 30000);
+    ws.onerror = () => {
+        updateStatus('disconnected');
+    };
 }
+
+function scheduleReconnect() {
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+    const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempts), 30000);
+    wsReconnectAttempts++;
+    console.log(`WS reconnect in ${delay}ms (attempt ${wsReconnectAttempts})`);
+    wsReconnectTimer = setTimeout(connectWebSocket, delay);
+}
+
+// Keep-alive ping (single interval, set once)
+setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send('ping');
+    }
+}, 30000);
 
 function flashCard(currencyCode) {
     const cells = document.querySelectorAll(`.cell-clickable[data-currency="${currencyCode}"]`);
@@ -425,10 +491,12 @@ function updateStatus(status, time) {
     const statusText = document.getElementById('connection-status');
     const lastUpdated = document.getElementById('last-updated');
 
+    if (!dot || !statusText) return;
+
     dot.className = 'dot ' + status;
     statusText.textContent = status === 'connected' ? '실시간 연결' : status === 'disconnected' ? '연결 끊김' : '연결 중...';
 
-    if (time) {
+    if (time && lastUpdated) {
         lastUpdated.textContent = `(${time.toLocaleTimeString('ko-KR')})`;
     }
 }
@@ -437,6 +505,7 @@ function updateStatus(status, time) {
 async function loadAlerts() {
     try {
         const resp = await fetch('/api/alerts/');
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const alerts = await resp.json();
         renderAlerts(alerts);
     } catch (e) {
@@ -446,7 +515,7 @@ async function loadAlerts() {
 
 function renderAlerts(alerts) {
     const container = document.getElementById('alert-list');
-    if (!alerts.length) {
+    if (!alerts || !alerts.length) {
         container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">설정된 알림 없음</div>';
         return;
     }
@@ -458,7 +527,7 @@ function renderAlerts(alerts) {
         return `
             <div class="alert-item">
                 <span class="alert-info">${a.currency_code}/KRW ${valueLabel} ${condLabel}</span>
-                <button class="delete-btn" onclick="deleteAlert(${a.id})">X</button>
+                <button class="delete-btn" onclick="deleteAlert(${parseInt(a.id)})">X</button>
             </div>
         `;
     }).join('');
@@ -475,11 +544,16 @@ async function addAlert() {
     }
 
     try {
-        await fetch('/api/alerts/', {
+        const resp = await fetch('/api/alerts/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ currency_code: currency, condition, threshold }),
         });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            alert(err.detail || '알림 추가 실패');
+            return;
+        }
         document.getElementById('alert-threshold').value = '';
         loadAlerts();
     } catch (e) {
