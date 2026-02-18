@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swap Spot - 실시간 환율 모니터</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>Swap Spot</h1>
+            <p class="subtitle">실시간 환율 모니터 &amp; 환전 타이밍 추천</p>
+            <div id="status-indicator">
+                <span class="dot"></span>
+                <span id="connection-status">연결 중...</span>
+                <span id="last-updated"></span>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- 주요 환율 테이블 (KRW 원화 기준) -->
+        <section class="rate-table-wrap">
+            <table class="rate-table">
+                <thead>
+                    <tr>
+                        <th>통화</th>
+                        <th>통화명</th>
+                        <th class="col-right">매매기준율</th>
+                        <th class="col-divider"></th>
+                        <th>통화</th>
+                        <th>통화명</th>
+                        <th class="col-right">매매기준율</th>
+                    </tr>
+                </thead>
+                <tbody id="rate-cards">
+                    <tr><td colspan="7" class="loading">환율 데이터 로딩 중...</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- 타이밍 추천 -->
+        <section id="timing-section" class="timing-panel">
+            <h2>환전 타이밍 추천 <span style="font-size:0.75rem;color:var(--text-secondary);font-weight:400">(KRW 원화 기준)</span></h2>
+            <div class="currency-selector">
+                <select id="timing-currency">
+                    <option value="USD">USD 미국 달러</option>
+                    <option value="EUR">EUR 유로</option>
+                    <option value="JPY">JPY 일본 엔</option>
+                    <option value="GBP">GBP 영국 파운드</option>
+                    <option value="CNH">CNH 중국 위안</option>
+                </select>
+            </div>
+            <div id="timing-result" class="timing-result">
+                <div class="timing-loading">분석 중...</div>
+            </div>
+        </section>
+
+        <!-- 여행 환전 플래너 -->
+        <section class="travel-planner">
+            <h2>내 여행, 최적의 환율</h2>
+            <div class="travel-hero">
+                <div class="travel-icon-flow">
+                    <span class="travel-step">
+                        <span class="step-icon">&#9992;</span>
+                        <span class="step-label">여행지</span>
+                    </span>
+                    <span class="travel-arrow">&#8594;</span>
+                    <span class="travel-step">
+                        <span class="step-icon">&#128197;</span>
+                        <span class="step-label">출발일</span>
+                    </span>
+                    <span class="travel-arrow">&#8594;</span>
+                    <span class="travel-step">
+                        <span class="step-icon">&#128176;</span>
+                        <span class="step-label">최적 타이밍</span>
+                    </span>
+                </div>
+            </div>
+            <div class="travel-form">
+                <div class="travel-input-group">
+                    <label class="travel-input-label" for="travel-currency">&#9992; 어디로 가세요?</label>
+                    <select id="travel-currency">
+                        <option value="JPY">&#127471;&#127477; 일본 (JPY)</option>
+                        <option value="USD">&#127482;&#127480; 미국 (USD)</option>
+                        <option value="EUR">&#127466;&#127482; 유럽 (EUR)</option>
+                        <option value="GBP">&#127468;&#127463; 영국 (GBP)</option>
+                        <option value="CNH">&#127464;&#127475; 중국 (CNH)</option>
+                        <option value="THB">&#127481;&#127469; 태국 (THB)</option>
+                        <option value="AUD">&#127462;&#127482; 호주 (AUD)</option>
+                        <option value="CAD">&#127464;&#127462; 캐나다 (CAD)</option>
+                        <option value="CHF">&#127464;&#127469; 스위스 (CHF)</option>
+                        <option value="SGD">&#127480;&#127468; 싱가포르 (SGD)</option>
+                        <option value="HKD">&#127469;&#127472; 홍콩 (HKD)</option>
+                    </select>
+                </div>
+                <div class="travel-input-group">
+                    <label class="travel-input-label" for="travel-date">&#128197; 언제 출발하세요?</label>
+                    <input type="date" id="travel-date" />
+                </div>
+                <button id="travel-analyze-btn">&#128270; 환전 타이밍 분석</button>
+            </div>
+            <div id="travel-result"></div>
+        </section>
+
+        <!-- 차트 섹션 -->
+        <section class="chart-section">
+            <div class="chart-header">
+                <h2>환율 추이 <span style="font-size:0.75rem;color:var(--text-secondary);font-weight:400">(KRW 원화 기준)</span></h2>
+                <div class="chart-controls">
+                    <select id="chart-currency">
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="JPY">JPY</option>
+                        <option value="GBP">GBP</option>
+                        <option value="CNY">CNY</option>
+                    </select>
+                    <div class="period-buttons">
+                        <button class="period-btn active" data-days="7">1주</button>
+                        <button class="period-btn" data-days="30">1개월</button>
+                        <button class="period-btn" data-days="90">3개월</button>
+                    </div>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="rateChart"></canvas>
+            </div>
+        </section>
+
+        <!-- 알림 설정 -->
+        <section class="alert-section">
+            <h2>환율 알림 설정 <span style="font-size:0.75rem;color:var(--text-secondary);font-weight:400">(KRW 원화 기준)</span></h2>
+            <div class="alert-form">
+                <select id="alert-currency">
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="JPY">JPY</option>
+                    <option value="GBP">GBP</option>
+                    <option value="CNY">CNY</option>
+                </select>
+                <select id="alert-condition">
+                    <option value="below">이하일 때</option>
+                    <option value="above">이상일 때</option>
+                    <option value="percent_change">변동률(%)</option>
+                </select>
+                <input type="number" id="alert-threshold" placeholder="목표 환율 (원)" step="0.01">
+                <button id="add-alert-btn">알림 추가</button>
+            </div>
+            <div id="alert-list" class="alert-list"></div>
+        </section>
+
+        <!-- 면책 조항 -->
+        <footer class="disclaimer">
+            <p>본 서비스의 환전 타이밍 추천은 통계적 분석 도구이며, 투자 또는 환전에 대한 전문적인 금융 조언이 아닙니다. 환율은 다양한 거시경제적 요인에 의해 변동되며, 과거 데이터가 미래 결과를 보장하지 않습니다.</p>
+        </footer>
+    </main>
+
+    <script src="/js/app.js?v=4"></script>
+</body>
+</html>
