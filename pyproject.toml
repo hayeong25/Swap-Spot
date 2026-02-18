@@ -16,6 +16,9 @@ dependencies = [
     "pytz>=2024.1",
 ]
 
+[tool.setuptools.packages.find]
+include = ["app*"]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
