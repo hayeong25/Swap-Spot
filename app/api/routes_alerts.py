@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
 from app.models.alert import Alert
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 @router.get("/")
 async def list_alerts() -> list[AlertResponse]:
     async with async_session() as session:
-        result = await session.execute(select(Alert).where(Alert.is_active == True))
+        result = await session.execute(select(Alert).where(Alert.is_active.is_(True)))
         alerts = result.scalars().all()
         return [AlertResponse.model_validate(a) for a in alerts]
 
@@ -33,10 +33,12 @@ async def create_alert(data: AlertCreate) -> AlertResponse:
 @router.delete("/{alert_id}")
 async def delete_alert(alert_id: int) -> dict:
     async with async_session() as session:
-        result = await session.execute(select(Alert).where(Alert.id == alert_id))
+        result = await session.execute(
+            select(Alert).where(Alert.id == alert_id, Alert.is_active.is_(True))
+        )
         alert = result.scalar_one_or_none()
         if not alert:
-            return {"ok": False, "message": "Alert not found"}
+            raise HTTPException(status_code=404, detail="Alert not found")
         alert.is_active = False
         await session.commit()
         return {"ok": True}

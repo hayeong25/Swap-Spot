@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime, timedelta
 
@@ -24,44 +25,52 @@ def register_alert_callback(callback):
 
 async def evaluate_alerts():
     async with async_session() as session:
-        stmt = select(Alert).where(Alert.is_active == True)
+        stmt = select(Alert).where(Alert.is_active.is_(True))
         result = await session.execute(stmt)
         alerts = result.scalars().all()
 
         for alert in alerts:
-            cached = rate_cache.latest.get(alert.currency_code)
-            if not cached:
-                continue
-
-            # 쿨다운 체크 — 마지막 발송 후 일정 시간 이내면 스킵
-            if alert.last_triggered_at:
-                cooldown_until = alert.last_triggered_at + timedelta(minutes=ALERT_COOLDOWN_MINUTES)
-                if datetime.now(KST) < cooldown_until.replace(tzinfo=KST) if cooldown_until.tzinfo is None else cooldown_until:
+            try:
+                cached = rate_cache.latest.get(alert.currency_code)
+                if not cached:
                     continue
 
-            triggered = False
-            message = ""
+                # 쿨다운 체크 — 마지막 발송 후 일정 시간 이내면 스킵
+                if alert.last_triggered_at:
+                    last = alert.last_triggered_at
+                    if last.tzinfo is None:
+                        last = KST.localize(last)
+                    cooldown_until = last + timedelta(minutes=ALERT_COOLDOWN_MINUTES)
+                    if datetime.now(KST) < cooldown_until:
+                        continue
 
-            if alert.condition == "below" and cached.rate <= alert.threshold:
-                triggered = True
-                message = f"{alert.currency_code}/KRW 환율이 {cached.rate:,.2f}원으로 목표가 {alert.threshold:,.2f}원 이하 도달!"
+                triggered = False
+                message = ""
 
-            elif alert.condition == "above" and cached.rate >= alert.threshold:
-                triggered = True
-                message = f"{alert.currency_code}/KRW 환율이 {cached.rate:,.2f}원으로 {alert.threshold:,.2f}원 이상 도달!"
+                if alert.condition == "below" and cached.rate <= alert.threshold:
+                    triggered = True
+                    message = f"{alert.currency_code}/KRW 환율이 {cached.rate:,.2f}원으로 목표가 {alert.threshold:,.2f}원 이하 도달!"
 
-            elif alert.condition == "percent_change":
-                rates = await get_rate_values(alert.currency_code, days=2)
-                if len(rates) >= 2:
-                    change_pct = abs(rates[-1] - rates[-2]) / rates[-2] * 100
-                    if change_pct >= alert.threshold:
-                        triggered = True
-                        message = f"{alert.currency_code}/KRW 환율 변동 {change_pct:.2f}% (임계값 {alert.threshold}%)"
+                elif alert.condition == "above" and cached.rate >= alert.threshold:
+                    triggered = True
+                    message = f"{alert.currency_code}/KRW 환율이 {cached.rate:,.2f}원으로 {alert.threshold:,.2f}원 이상 도달!"
 
-            if triggered:
-                alert.last_triggered_at = datetime.now(KST)
-                await session.commit()
-                await dispatch_alert(alert, message)
+                elif alert.condition == "percent_change":
+                    rates = await get_rate_values(alert.currency_code, days=7)
+                    if len(rates) >= 2:
+                        prev_rate = rates[-2]  # 직전 영업일 종가
+                        current_rate = cached.rate  # 현재 캐시 (장중 실시간)
+                        change_pct = abs(current_rate - prev_rate) / prev_rate * 100
+                        if change_pct >= alert.threshold:
+                            triggered = True
+                            message = f"{alert.currency_code}/KRW 환율 변동 {change_pct:.2f}% (임계값 {alert.threshold}%)"
+
+                if triggered:
+                    alert.last_triggered_at = datetime.now(KST)
+                    await session.commit()
+                    await dispatch_alert(alert, message)
+            except Exception as e:
+                logger.error(f"Alert evaluation failed for alert {alert.id}: {e}")
 
 
 async def dispatch_alert(alert: Alert, message: str):
@@ -91,4 +100,6 @@ async def send_telegram(message: str, max_retries: int = 3):
                 logger.warning(f"Telegram send returned {resp.status_code} (attempt {attempt + 1})")
         except Exception as e:
             logger.error(f"Telegram send failed (attempt {attempt + 1}): {e}")
+        if attempt < max_retries - 1:
+            await asyncio.sleep(2 ** attempt)  # 1s, 2s backoff
     logger.error("Telegram send failed after all retries")
