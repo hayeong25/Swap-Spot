@@ -6,7 +6,7 @@ from app.sources.base import ExchangeRateSource
 
 logger = logging.getLogger(__name__)
 
-SOURCE_PRIORITY = {"koreaexim": 1, "hanabank": 2, "ecos": 3}
+SOURCE_PRIORITY = {"koreaexim": 1, "hanabank": 2, "ecos": 3, "demo": 4}
 
 
 class RateAggregator:

@@ -17,11 +17,10 @@ ECOS_CURRENCY_ITEMS = {
     "EUR": "0000003",  # 원/유로
     "JPY": "0000002",  # 원/100엔
     "GBP": "0000005",  # 원/영파운드
-    "CNY": "0000053",  # 원/위안
+    "CNH": "0000053",  # 원/위안(역외)
 }
 
 TABLE_CODE = "731Y001"  # 환율 일별 시세
-ITEM_CODE_PREFIX = "0000001"  # 기준환율
 
 
 class EcosSource(ExchangeRateSource):
@@ -29,7 +28,7 @@ class EcosSource(ExchangeRateSource):
     BASE_URL = "https://ecos.bok.or.kr/api/StatisticSearch"
 
     async def fetch_rates(self) -> list[RateData]:
-        today = date.today()
+        today = datetime.now(KST).date()
         rates = []
         try:
             verify_ssl = settings.env != "development"
@@ -48,7 +47,7 @@ class EcosSource(ExchangeRateSource):
         if not item_code:
             return []
 
-        end_date = date.today()
+        end_date = datetime.now(KST).date()
         start_date = end_date - timedelta(days=days)
         url = (
             f"{self.BASE_URL}/{settings.ecos_api_key}/json/kr/1/300"
@@ -118,9 +117,11 @@ class EcosSource(ExchangeRateSource):
 
     async def health_check(self) -> bool:
         try:
+            today = datetime.now(KST).date()
+            week_ago = today - timedelta(days=7)
             url = (
                 f"{self.BASE_URL}/{settings.ecos_api_key}/json/kr/1/1"
-                f"/{TABLE_CODE}/D/20240101/20240102/{ITEM_CODE_PREFIX}"
+                f"/{TABLE_CODE}/D/{week_ago.strftime('%Y%m%d')}/{today.strftime('%Y%m%d')}/{ECOS_CURRENCY_ITEMS['USD']}"
             )
             verify_ssl = settings.env != "development"
             async with httpx.AsyncClient(timeout=5.0, verify=verify_ssl) as client:

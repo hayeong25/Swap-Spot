@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime
+from datetime import datetime
 
 import httpx
 import pytz
@@ -17,7 +17,7 @@ CURRENCY_MAP = {
     "유로": "EUR",
     "일본 엔": "JPY",
     "영국 파운드": "GBP",
-    "중국 위안": "CNY",
+    "중국 위안": "CNH",
     "스위스 프랑": "CHF",
     "캐나다 달러": "CAD",
     "호주 달러": "AUD",
@@ -67,7 +67,7 @@ class HanaBankSource(ExchangeRateSource):
     def _parse_rates(self, soup: BeautifulSoup) -> list[RateData]:
         rates = []
         now = datetime.now(KST)
-        today = date.today()
+        today = now.date()
 
         # 여러 가능한 테이블 선택자 시도
         table = None
@@ -97,17 +97,20 @@ class HanaBankSource(ExchangeRateSource):
                 continue
 
             try:
-                # 칼럼 순서: 통화명, 현찰매입, 현찰매도, 송금보내실때, 송금받으실때, 매매기준율 등
-                values = [self._parse_val(c.get_text(strip=True)) for c in cells[1:]]
-                values = [v for v in values if v is not None and v > 0]
+                # 칼럼 순서: 통화명, 현찰매입, 현찰매도, 송금보내실때(TTS), 송금받으실때(TTB), 매매기준율 등
+                all_vals = [self._parse_val(c.get_text(strip=True)) for c in cells[1:]]
 
-                if not values:
+                # 유효값(양수)이 하나도 없으면 스킵
+                valid_vals = [v for v in all_vals if v is not None and v > 0]
+                if not valid_vals:
                     continue
 
-                # 마지막 유효값을 기준율로, 나머지에서 매입/매도 추정
-                rate_val = values[-1] if len(values) >= 1 else 0
-                cash_buy = values[0] if len(values) >= 2 else None
-                cash_sell = values[1] if len(values) >= 3 else None
+                cash_buy = all_vals[0] if len(all_vals) > 0 and all_vals[0] and all_vals[0] > 0 else None
+                cash_sell = all_vals[1] if len(all_vals) > 1 and all_vals[1] and all_vals[1] > 0 else None
+                tt_sell = all_vals[2] if len(all_vals) > 2 and all_vals[2] and all_vals[2] > 0 else None  # 송금보내실때
+                tt_buy = all_vals[3] if len(all_vals) > 3 and all_vals[3] and all_vals[3] > 0 else None   # 송금받으실때
+                rate_val = all_vals[4] if len(all_vals) > 4 and all_vals[4] and all_vals[4] > 0 else valid_vals[-1]
+
                 spread = round(cash_sell - cash_buy, 2) if cash_buy and cash_sell else None
 
                 rates.append(RateData(
@@ -115,6 +118,8 @@ class HanaBankSource(ExchangeRateSource):
                     rate=rate_val,
                     cash_buy_rate=cash_buy,
                     cash_sell_rate=cash_sell,
+                    tt_buy_rate=tt_buy,
+                    tt_sell_rate=tt_sell,
                     spread=spread,
                     source=self.source_name,
                     fetched_at=now,

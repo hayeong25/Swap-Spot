@@ -71,6 +71,9 @@ class KoreaEximSource(ExchangeRateSource):
                 if not cur_unit:
                     continue
                 currency_code = str(cur_unit).replace("(100)", "").strip()
+                # CNY(역내위안)를 CNH(역외위안)로 통일
+                if currency_code == "CNY":
+                    currency_code = "CNH"
                 deal_bas_r = item.get("deal_bas_r") or "0"
                 ttb = item.get("ttb") or "0"
                 tts = item.get("tts") or "0"
@@ -79,11 +82,13 @@ class KoreaEximSource(ExchangeRateSource):
                 if rate_val <= 0:
                     continue
 
+                tt_buy_val = self._parse_rate(ttb)
+                tt_sell_val = self._parse_rate(tts)
                 rates.append(RateData(
                     currency_code=currency_code,
                     rate=rate_val,
-                    tt_buy_rate=self._parse_rate(ttb) or None,
-                    tt_sell_rate=self._parse_rate(tts) or None,
+                    tt_buy_rate=tt_buy_val if tt_buy_val > 0 else None,
+                    tt_sell_rate=tt_sell_val if tt_sell_val > 0 else None,
                     spread=self._calc_spread(ttb, tts),
                     source=self.source_name,
                     fetched_at=now,
