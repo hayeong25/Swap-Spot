@@ -86,8 +86,8 @@ def compute_target_rate(rates: list[float]) -> float | None:
     return target
 
 
-async def compute_timing(currency: str) -> dict:
-    rates = await get_rate_values(currency, days=90)
+async def compute_timing(currency: str, _rates: list[float] | None = None) -> dict:
+    rates = list(_rates) if _rates is not None else await get_rate_values(currency, days=90)
 
     cached = rate_cache.latest.get(currency)
     current = cached.rate if cached else (rates[-1] if rates else 0)
@@ -188,12 +188,21 @@ def _build_message(
         )
         tip = "남은 기간이 짧아 지금 전액 환전하는 것이 안전합니다."
     elif urgency == "urgent":
-        msg = (
-            f"출발까지 {days_remaining}일 남았습니다. "
-            f"현재 {currency} 환율 {rate_str} (90일 중 {pct_str}). "
-            f"환전 시기가 다가왔습니다. 빠른 환전을 추천합니다."
-        )
-        tip = "분할 환전 추천: 지금 70%, 출발 직전 나머지 30%"
+        if recommendation == "WAIT":
+            target_msg = f" 약 {target_str} 이하를 기다려보되, 출발 1주 전까지는 환전하세요." if target_str else ""
+            msg = (
+                f"출발까지 {days_remaining}일 남았습니다. "
+                f"현재 {currency} 환율 {rate_str} (90일 중 {pct_str})로 다소 높지만, "
+                f"출발이 가까우니 분할 환전을 고려하세요.{target_msg}"
+            )
+            tip = "분할 환전 추천: 지금 50%, 출발 직전 나머지 50%"
+        else:
+            msg = (
+                f"출발까지 {days_remaining}일 남았습니다. "
+                f"현재 {currency} 환율 {rate_str} (90일 중 {pct_str}). "
+                f"환전 시기가 다가왔습니다. 빠른 환전을 추천합니다."
+            )
+            tip = "분할 환전 추천: 지금 70%, 출발 직전 나머지 30%"
     elif urgency == "caution":
         if recommendation == "BUY":
             msg = (
@@ -247,7 +256,7 @@ def _build_message(
 
 
 async def compute_travel_timing(currency: str, travel_date: date) -> dict:
-    today = date.today()
+    today = datetime.now(KST).date()
     days_remaining = (travel_date - today).days
 
     if days_remaining <= 0:
@@ -269,8 +278,8 @@ async def compute_travel_timing(currency: str, travel_date: date) -> dict:
             "updated_at": datetime.now(KST).isoformat(),
         }
 
-    base = await compute_timing(currency)
     rates = await get_rate_values(currency, days=90)
+    base = await compute_timing(currency, _rates=list(rates))
 
     urgency = _compute_urgency(days_remaining)
     original_rec = base["recommendation"]
