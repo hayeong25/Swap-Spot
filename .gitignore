@@ -10,3 +10,8 @@ dist/
 build/
 .pytest_cache/
 .claude/
+.mypy_cache/
+.ruff_cache/
+*.log
+.coverage
+htmlcov/
