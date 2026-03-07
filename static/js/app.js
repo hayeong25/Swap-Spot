@@ -6,25 +6,13 @@ const CURRENCY_INFO = {
     EUR: { name: '유로', symbol: '€', unit: 1 },
     JPY: { name: '일본 엔', symbol: '¥', unit: 100 },
     GBP: { name: '영국 파운드', symbol: '£', unit: 1 },
-    CNY: { name: '중국 위안', symbol: '¥', unit: 1 },
-    CNH: { name: '중국 위안(역외)', symbol: '¥', unit: 1 },
+    CNH: { name: '중국 위안', symbol: '¥', unit: 1 },
     CHF: { name: '스위스 프랑', symbol: 'Fr', unit: 1 },
     CAD: { name: '캐나다 달러', symbol: 'C$', unit: 1 },
     AUD: { name: '호주 달러', symbol: 'A$', unit: 1 },
     HKD: { name: '홍콩 달러', symbol: 'HK$', unit: 1 },
     SGD: { name: '싱가포르 달러', symbol: 'S$', unit: 1 },
     THB: { name: '태국 바트', symbol: '฿', unit: 1 },
-    AED: { name: 'UAE 디르함', symbol: 'د.إ', unit: 1 },
-    BHD: { name: '바레인 디나르', symbol: 'BD', unit: 1 },
-    BND: { name: '브루나이 달러', symbol: 'B$', unit: 1 },
-    DKK: { name: '덴마크 크로네', symbol: 'kr', unit: 1 },
-    IDR: { name: '인도네시아 루피아', symbol: 'Rp', unit: 100 },
-    KWD: { name: '쿠웨이트 디나르', symbol: 'KD', unit: 1 },
-    MYR: { name: '말레이시아 링깃', symbol: 'RM', unit: 1 },
-    NOK: { name: '노르웨이 크로네', symbol: 'kr', unit: 1 },
-    NZD: { name: '뉴질랜드 달러', symbol: 'NZ$', unit: 1 },
-    SAR: { name: '사우디 리얄', symbol: 'SR', unit: 1 },
-    SEK: { name: '스웨덴 크로나', symbol: 'kr', unit: 1 },
 };
 
 const CONDITION_LABELS = {
@@ -65,6 +53,9 @@ function setupEventListeners() {
         });
     });
     document.getElementById('add-alert-btn').addEventListener('click', addAlert);
+    document.getElementById('alert-currency').addEventListener('change', updateAlertPlaceholder);
+    document.getElementById('alert-condition').addEventListener('change', updateAlertPlaceholder);
+    updateAlertPlaceholder();
     document.getElementById('travel-analyze-btn').addEventListener('click', fetchTravelTiming);
     document.getElementById('forecast-btn').addEventListener('click', fetchForecast);
 }
@@ -134,8 +125,13 @@ function renderRateCards(rates) {
 }
 
 function selectCurrency(code) {
-    document.getElementById('chart-currency').value = code;
-    document.getElementById('timing-currency').value = code;
+    ['chart-currency', 'timing-currency', 'forecast-currency', 'alert-currency', 'travel-currency'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            const option = el.querySelector(`option[value="${code}"]`);
+            if (option) el.value = code;
+        }
+    });
     debouncedChartUpdate();
     debouncedTimingUpdate();
 }
@@ -165,9 +161,9 @@ function renderTiming(data, currency) {
     const rec = data.recommendation;
     const recLabel = { BUY: '매수 적기', HOLD: '관망', WAIT: '대기' }[rec] || rec;
     const recDesc = {
-        BUY: '현재 환율이 최근 대비 낮은 수준입니다. 환전하기 좋은 시점일 수 있습니다.',
+        BUY: '복합 분석 결과 지금 환전이 유리한 시점입니다. 환율이 낮거나 추가 상승 전에 환전을 고려하세요.',
         HOLD: '환율이 평균 수준입니다. 급하지 않다면 추이를 지켜보세요.',
-        WAIT: '현재 환율이 최근 대비 높은 수준입니다. 조금 더 기다려보는 것을 추천합니다.',
+        WAIT: '현재 환율이 최근 대비 높은 수준입니다. 하락을 기다려보는 것을 추천합니다.',
     }[rec] || '';
     const confPct = Math.round((data.confidence || 0) * 100);
 
@@ -336,7 +332,11 @@ function renderForecast(data) {
     const container = document.getElementById('forecast-result');
 
     if (!data || data.error) {
-        container.innerHTML = `<div class="forecast-loading">${data?.error || '데이터 부족'}</div>`;
+        const div = document.createElement('div');
+        div.className = 'forecast-loading';
+        div.textContent = data?.error || '데이터 부족';
+        container.innerHTML = '';
+        container.appendChild(div);
         return;
     }
 
@@ -348,9 +348,14 @@ function renderForecast(data) {
         return `${fmt(start)} ~ ${fmt(end)}`;
     }
 
+    const volLabel = data.annual_volatility_pct != null
+        ? `연간 변동성: ${data.annual_volatility_pct}%`
+        : '';
+
     let html = `
         <div class="forecast-meta">
             <span>현재 환율: ${krw(data.current_rate)}</span>
+            ${volLabel ? `<span>${volLabel}</span>` : ''}
         </div>
         <div class="forecast-horizons">
     `;
@@ -358,7 +363,7 @@ function renderForecast(data) {
     for (const horizon of data.horizons) {
         html += `
             <div class="forecast-horizon-card">
-                <div class="horizon-header">${getDateRange(horizon.weeks)}</div>
+                <div class="horizon-header">${horizon.weeks}주 후 (${getDateRange(horizon.weeks)})</div>
                 <div class="horizon-distribution">
                     <span class="dist-range">${krw(horizon.distribution.p25)} ~ ${krw(horizon.distribution.p75)}</span>
                 </div>
@@ -398,7 +403,7 @@ function initChart() {
             labels: [],
             datasets: [
                 {
-                    label: '환전 시 수령액',
+                    label: '매매기준율',
                     data: [],
                     borderColor: '#00d68f',
                     backgroundColor: 'rgba(0, 214, 143, 0.1)',
@@ -446,7 +451,7 @@ function initChart() {
                         label: function(context) {
                             const val = context.parsed.y;
                             if (val == null) return null;
-                            return `수령액: ${val.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}원`;
+                            return `매매기준율: ${val.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}원`;
                         },
                     },
                 },
@@ -479,12 +484,13 @@ async function updateChart() {
         }
 
         const labels = data.rates.map(r => r.date);
-        const ttBuy = data.rates.map(r => r.tt_buy_rate || r.rate);
+        const rateValues = data.rates.map(r => r.rate);
 
         rateChart.data.labels = labels;
-        rateChart.data.datasets[0].data = ttBuy;
-        rateChart.data.datasets[0].label = `환전 시 수령액 (${currency}/KRW)`;
+        rateChart.data.datasets[0].data = rateValues;
+        rateChart.data.datasets[0].label = `매매기준율 (${currency}/KRW)`;
         rateChart.options.scales.y.title.text = `${currency}/KRW (원)`;
+        rateChart.resetZoom();
         rateChart.update();
     } catch (e) {
         console.error('Chart update failed:', e);
@@ -512,11 +518,18 @@ function connectWebSocket() {
             if (msg.type === 'snapshot' || msg.type === 'update') {
                 Object.entries(msg.data).forEach(([code, rate]) => {
                     currentRates[code] = rate;
-                    flashCard(code);
+                    if (msg.type === 'update') flashCard(code);
                 });
-                const rateList = Object.values(currentRates);
+                const currencyOrder = Object.keys(CURRENCY_INFO);
+                const rateList = Object.values(currentRates)
+                    .sort((a, b) => {
+                        const ai = currencyOrder.indexOf(a.currency_code);
+                        const bi = currencyOrder.indexOf(b.currency_code);
+                        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                    });
                 renderRateCards(rateList);
-                updateStatus('connected', new Date());
+                const serverTime = msg.timestamp ? new Date(msg.timestamp) : new Date();
+                updateStatus('connected', serverTime);
             }
         } catch (e) {
             console.error('WS message parse error:', e);
@@ -593,6 +606,13 @@ function renderAlerts(alerts) {
         container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">설정된 알림 없음</div>';
         return;
     }
+
+    function esc(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
     container.innerHTML = alerts.map(a => {
         const condLabel = CONDITION_LABELS[a.condition] || a.condition;
         const valueLabel = a.condition === 'percent_change'
@@ -600,7 +620,7 @@ function renderAlerts(alerts) {
             : `${krw(a.threshold)}`;
         return `
             <div class="alert-item">
-                <span class="alert-info">${a.currency_code}/KRW ${valueLabel} ${condLabel}</span>
+                <span class="alert-info">${esc(a.currency_code)}/KRW ${esc(valueLabel)} ${esc(condLabel)}</span>
                 <button class="delete-btn" onclick="deleteAlert(${parseInt(a.id)})">X</button>
             </div>
         `;
@@ -613,7 +633,9 @@ async function addAlert() {
     const threshold = parseFloat(document.getElementById('alert-threshold').value);
 
     if (isNaN(threshold) || threshold <= 0) {
-        alert('유효한 임계값을 입력해주세요.');
+        const info = CURRENCY_INFO[currency] || {};
+        const unitHint = info.unit > 1 ? ` (${currency}는 ${info.unit}단위 기준)` : '';
+        alert(`유효한 임계값을 입력해주세요.${unitHint}`);
         return;
     }
 
@@ -630,6 +652,7 @@ async function addAlert() {
         }
         document.getElementById('alert-threshold').value = '';
         loadAlerts();
+        showToast('알림이 추가되었습니다.');
     } catch (e) {
         console.error('Failed to add alert:', e);
     }
@@ -637,10 +660,27 @@ async function addAlert() {
 
 async function deleteAlert(id) {
     try {
-        await fetch(`/api/alerts/${id}`, { method: 'DELETE' });
+        const resp = await fetch(`/api/alerts/${id}`, { method: 'DELETE' });
+        if (!resp.ok) {
+            console.warn(`Delete alert ${id} failed: HTTP ${resp.status}`);
+        }
         loadAlerts();
+        showToast('알림이 삭제되었습니다.');
     } catch (e) {
         console.error('Failed to delete alert:', e);
+    }
+}
+
+function updateAlertPlaceholder() {
+    const currency = document.getElementById('alert-currency').value;
+    const condition = document.getElementById('alert-condition').value;
+    const input = document.getElementById('alert-threshold');
+    const info = CURRENCY_INFO[currency] || {};
+    const unitNote = info.unit > 1 ? ` (${info.unit}단위)` : '';
+    if (condition === 'percent_change') {
+        input.placeholder = '변동률 (%)';
+    } else {
+        input.placeholder = `목표 환율 (원)${unitNote}`;
     }
 }
 
@@ -653,8 +693,21 @@ function requestNotificationPermission() {
 
 function showNotification(title, body) {
     if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, { body, icon: '/assets/favicon.ico' });
+        new Notification(title, { body });
     }
+}
+
+// ===== Toast =====
+function showToast(message, duration = 2500) {
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = 'position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);background:#1a1d27;color:#e4e6eb;border:1px solid #2a2e3f;padding:0.7rem 1.5rem;border-radius:8px;font-size:0.9rem;z-index:9999;opacity:0;transition:opacity 0.3s';
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => { toast.style.opacity = '1'; });
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
 }
 
 // ===== Utility =====

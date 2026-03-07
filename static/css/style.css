@@ -22,6 +22,7 @@ body {
     font-family: var(--font);
     background: var(--bg);
     color: var(--text);
+    color-scheme: dark;
     min-height: 100vh;
 }
 
@@ -854,6 +855,7 @@ select:focus, input:focus, button:focus-visible {
     .rate-table-wrap { overflow-x: auto; }
     .rate-row td { padding: 0.7rem 0.8rem; font-size: 0.85rem; }
     .rate-table thead th { padding: 0.7rem 0.8rem; font-size: 0.7rem; }
+    .rate-table { min-width: 600px; }
     .timing-result { grid-template-columns: 1fr; justify-items: center; }
     .chart-container { height: 250px; }
     .alert-form { flex-direction: column; }
@@ -867,4 +869,15 @@ select:focus, input:focus, button:focus-visible {
     .travel-tip { border-left: none; border-top: 3px solid var(--accent); border-radius: 0 0 8px 8px; }
     .forecast-horizons { grid-template-columns: 1fr; }
     .forecast-controls { flex-direction: column; align-items: stretch; }
+}
+
+/* Responsive - small mobile: single column rate table */
+@media (max-width: 480px) {
+    .rate-table { min-width: unset; }
+    .rate-table .col-divider,
+    .rate-table thead th.col-divider,
+    .rate-table thead th:nth-child(n+5),
+    .rate-table .rate-row td:nth-child(n+5) {
+        display: none;
+    }
 }

@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="실시간 환율 모니터링 및 환전 타이밍 추천 대시보드. 11개 주요 통화의 매매기준율, 3-Signal 분석, Monte Carlo 예측을 제공합니다.">
+    <meta name="theme-color" content="#0f1117">
     <title>Swap Spot - 실시간 환율 모니터</title>
     <link rel="stylesheet" href="/css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
     <header>
@@ -23,8 +25,8 @@
 
     <main>
         <!-- 주요 환율 테이블 (KRW 원화 기준) -->
-        <section class="rate-table-wrap">
-            <table class="rate-table">
+        <section class="rate-table-wrap" aria-label="주요 환율 현황">
+            <table class="rate-table" role="table" aria-label="주요 통화 매매기준율">
                 <thead>
                     <tr>
                         <th>통화</th>
@@ -43,7 +45,7 @@
         </section>
 
         <!-- 타이밍 추천 -->
-        <section id="timing-section" class="timing-panel">
+        <section id="timing-section" class="timing-panel" aria-label="환전 타이밍 추천">
             <h2>환전 타이밍 추천 <span style="font-size:0.75rem;color:var(--text-secondary);font-weight:400">(KRW 원화 기준)</span></h2>
             <div class="currency-selector">
                 <select id="timing-currency">
@@ -52,6 +54,12 @@
                     <option value="JPY">JPY 일본 엔</option>
                     <option value="GBP">GBP 영국 파운드</option>
                     <option value="CNH">CNH 중국 위안</option>
+                    <option value="CHF">CHF 스위스 프랑</option>
+                    <option value="CAD">CAD 캐나다 달러</option>
+                    <option value="AUD">AUD 호주 달러</option>
+                    <option value="HKD">HKD 홍콩 달러</option>
+                    <option value="SGD">SGD 싱가포르 달러</option>
+                    <option value="THB">THB 태국 바트</option>
                 </select>
             </div>
             <div id="timing-result" class="timing-result">
@@ -119,6 +127,9 @@
                     <option value="CHF">CHF 스위스 프랑</option>
                     <option value="CAD">CAD 캐나다 달러</option>
                     <option value="AUD">AUD 호주 달러</option>
+                    <option value="HKD">HKD 홍콩 달러</option>
+                    <option value="SGD">SGD 싱가포르 달러</option>
+                    <option value="THB">THB 태국 바트</option>
                 </select>
                 <button id="forecast-btn">확률 분석</button>
             </div>
@@ -136,6 +147,12 @@
                         <option value="JPY">JPY</option>
                         <option value="GBP">GBP</option>
                         <option value="CNH">CNH</option>
+                        <option value="CHF">CHF</option>
+                        <option value="CAD">CAD</option>
+                        <option value="AUD">AUD</option>
+                        <option value="HKD">HKD</option>
+                        <option value="SGD">SGD</option>
+                        <option value="THB">THB</option>
                     </select>
                     <div class="period-buttons">
                         <button class="period-btn active" data-days="7">1주</button>
@@ -159,13 +176,19 @@
                     <option value="JPY">JPY</option>
                     <option value="GBP">GBP</option>
                     <option value="CNH">CNH</option>
+                    <option value="CHF">CHF</option>
+                    <option value="CAD">CAD</option>
+                    <option value="AUD">AUD</option>
+                    <option value="HKD">HKD</option>
+                    <option value="SGD">SGD</option>
+                    <option value="THB">THB</option>
                 </select>
                 <select id="alert-condition">
                     <option value="below">이하일 때</option>
                     <option value="above">이상일 때</option>
                     <option value="percent_change">변동률(%)</option>
                 </select>
-                <input type="number" id="alert-threshold" placeholder="목표 환율 (원)" step="0.01">
+                <input type="number" id="alert-threshold" placeholder="목표 환율 (원)" step="0.01" aria-label="알림 임계값">
                 <button id="add-alert-btn">알림 추가</button>
             </div>
             <div id="alert-list" class="alert-list"></div>
@@ -177,6 +200,6 @@
         </footer>
     </main>
 
-    <script src="/js/app.js?v=9"></script>
+    <script src="/js/app.js?v=12"></script>
 </body>
 </html>
