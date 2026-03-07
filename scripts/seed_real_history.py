@@ -50,7 +50,7 @@ async def seed():
     total_stored = 0
     api_calls = 0
 
-    async with httpx.AsyncClient(timeout=10.0, verify=False, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
         async with async_session() as session:
             d = today
             for _ in range(days_back):
@@ -75,6 +75,8 @@ async def seed():
                         continue
 
                     currency_code = str(cur_unit).replace("(100)", "").strip()
+                    if currency_code == "CNY":
+                        currency_code = "CNH"
                     deal_bas_r = parse_rate(item.get("deal_bas_r") or "0")
                     ttb = parse_rate(item.get("ttb") or "0")
                     tts = parse_rate(item.get("tts") or "0")

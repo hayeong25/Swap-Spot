@@ -57,20 +57,14 @@ async def main():
 
         # 주요 통화 존재 확인
         currency_codes = {r["currency_code"] for r in rates}
-        major_currencies = ["USD", "EUR", "JPY", "GBP", "CNH", "CHF", "CAD", "AUD", "HKD", "SGD"]
+        major_currencies = ["USD", "EUR", "JPY", "GBP", "CNH", "CHF", "CAD", "AUD", "HKD", "SGD", "THB"]
         for cur in major_currencies:
             present = cur in currency_codes
             if present:
                 rate_obj = next(r for r in rates if r["currency_code"] == cur)
                 result(f"  {cur} 데이터 확인", True, f"{rate_obj['rate']:,.2f}원 (source: {rate_obj['source']})")
             else:
-                # CNH 대신 CNY 일 수 있음
-                alt = "CNY" if cur == "CNH" else None
-                if alt and alt in currency_codes:
-                    rate_obj = next(r for r in rates if r["currency_code"] == alt)
-                    result(f"  {alt} 데이터 확인 (CNH→CNY)", True, f"{rate_obj['rate']:,.2f}원")
-                else:
-                    warn(f"  {cur} 데이터 없음")
+                warn(f"  {cur} 데이터 없음")
 
         # 환율값 유효성 검증
         print("\n[2] 환율값 유효성 검증")
@@ -260,7 +254,7 @@ async def main():
 
         # 없는 알림 삭제
         resp = await client.delete("/api/alerts/99999")
-        result("없는 알림 삭제 처리", resp.json().get("ok") == False)
+        result("없는 알림 삭제 처리", resp.status_code == 404, f"HTTP {resp.status_code}")
 
         # ============================================================
         # TEST 6: WebSocket 연결 테스트
