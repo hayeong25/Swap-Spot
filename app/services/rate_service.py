@@ -4,13 +4,20 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
 import pytz
-from sqlalchemy import select, func, distinct
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import async_session
 from app.models.exchange_rate import ExchangeRate
 from app.schemas.rate import RateData
-from app.sources.aggregator import RateAggregator
+from app.sources.aggregator import RateAggregator, SOURCE_PRIORITY
+
+_broadcast_callback = None
+
+
+def set_broadcast_callback(callback):
+    global _broadcast_callback
+    _broadcast_callback = callback
 
 logger = logging.getLogger(__name__)
 KST = pytz.timezone("Asia/Seoul")
@@ -38,6 +45,10 @@ rate_cache = RateCache()
 async def fetch_and_store(aggregator: RateAggregator) -> dict[str, RateData]:
     rates = await aggregator.fetch_all()
 
+    if not rates:
+        logger.debug("No rates fetched, skipping store")
+        return rates
+
     async with async_session() as session:
         for currency, rate_data in rates.items():
             db_rate = ExchangeRate(
@@ -59,13 +70,20 @@ async def fetch_and_store(aggregator: RateAggregator) -> dict[str, RateData]:
         await session.commit()
 
     logger.info(f"Stored {len(rates)} rates, cache updated")
+
+    if _broadcast_callback:
+        try:
+            await _broadcast_callback(rate_cache.get_all())
+        except Exception as e:
+            logger.error(f"Broadcast failed: {e}")
+
     return rates
 
 
 async def get_historical_rates(
     currency: str, days: int = 30, session: AsyncSession | None = None
 ) -> list[dict]:
-    start_date = date.today() - timedelta(days=days)
+    start_date = datetime.now(KST).date() - timedelta(days=days)
 
     async def _query(s: AsyncSession):
         stmt = (
@@ -74,7 +92,7 @@ async def get_historical_rates(
                 ExchangeRate.currency_code == currency,
                 ExchangeRate.rate_date >= start_date,
             )
-            .order_by(ExchangeRate.rate_date)
+            .order_by(ExchangeRate.rate_date, ExchangeRate.fetched_at)
         )
         result = await s.execute(stmt)
         rows = result.scalars().all()
@@ -82,7 +100,8 @@ async def get_historical_rates(
         seen = {}
         for row in rows:
             key = row.rate_date.isoformat()
-            if key not in seen:
+            row_priority = SOURCE_PRIORITY.get(row.source, 99)
+            if key not in seen or row_priority < SOURCE_PRIORITY.get(seen[key]["source"], 99):
                 seen[key] = {
                     "date": key,
                     "rate": row.rate,

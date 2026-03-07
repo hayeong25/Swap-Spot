@@ -30,8 +30,11 @@ async def websocket_rates(ws: WebSocket):
                 code: {
                     "currency_code": r.currency_code,
                     "rate": r.rate,
+                    "tt_buy_rate": r.tt_buy_rate,
+                    "tt_sell_rate": r.tt_sell_rate,
                     "cash_buy_rate": r.cash_buy_rate,
                     "cash_sell_rate": r.cash_sell_rate,
+                    "spread": r.spread,
                     "source": r.source,
                     "updated_at": r.fetched_at.isoformat(),
                 }
@@ -42,7 +45,7 @@ async def websocket_rates(ws: WebSocket):
 
         # 클라이언트 연결 유지 (ping/pong)
         while True:
-            await asyncio.wait_for(ws.receive_text(), timeout=60)
+            await asyncio.wait_for(ws.receive_text(), timeout=90)
     except (WebSocketDisconnect, asyncio.TimeoutError):
         pass
     finally:
@@ -60,8 +63,11 @@ async def broadcast_rates(rates: dict):
             code: {
                 "currency_code": r.currency_code,
                 "rate": r.rate,
+                "tt_buy_rate": r.tt_buy_rate,
+                "tt_sell_rate": r.tt_sell_rate,
                 "cash_buy_rate": r.cash_buy_rate,
                 "cash_sell_rate": r.cash_sell_rate,
+                "spread": r.spread,
                 "source": r.source,
                 "updated_at": r.fetched_at.isoformat(),
             }
@@ -71,13 +77,16 @@ async def broadcast_rates(rates: dict):
         "timestamp": datetime.now(KST).isoformat(),
     }, ensure_ascii=False)
 
-    disconnected = set()
-    for ws in connected_clients:
+    async def _send(ws: WebSocket):
         try:
             await ws.send_text(payload)
+            return None
         except Exception as e:
             logger.warning(f"WS broadcast failed for client: {e}")
-            disconnected.add(ws)
+            return ws
+
+    results = await asyncio.gather(*[_send(ws) for ws in connected_clients])
+    disconnected = {ws for ws in results if ws is not None}
 
     if disconnected:
         connected_clients.difference_update(disconnected)
